@@ -47,6 +47,7 @@ private:
     juce::ComboBox calSelector;
     juce::ToggleButton wowFlutterButton;
     juce::ToggleButton hissButton;
+    juce::TextButton presetButton;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -71,6 +72,11 @@ private:
     void configureRotarySlider(juce::Slider& slider, const juce::String& suffix);
     void configureControlLabel(juce::Label& label, const juce::String& text);
     void updateTrackLabel();
+    void showPresetMenu();
+    void savePreset();
+    void loadPreset();
+
+    std::shared_ptr<juce::FileChooser> currentFileChooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JuiceAudioProcessorEditor)
 };

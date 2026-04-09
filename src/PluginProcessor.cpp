@@ -172,6 +172,87 @@ void JuiceAudioProcessor::prepareToPlay(double sampleRate, int)
 
 void JuiceAudioProcessor::releaseResources() {}
 
+int JuiceAudioProcessor::getNumPrograms()
+{
+    return 2;
+}
+
+int JuiceAudioProcessor::getCurrentProgram()
+{
+    return currentProgram;
+}
+
+const juce::String JuiceAudioProcessor::getProgramName(int index)
+{
+    switch (index)
+    {
+        case 0: return "15 ips Color";
+        case 1: return "30 ips Clean";
+        default: return {};
+    }
+}
+
+void JuiceAudioProcessor::setCurrentProgram(int index)
+{
+    currentProgram = juce::jlimit(0, getNumPrograms() - 1, index);
+    applyProgramPreset(currentProgram);
+}
+
+void JuiceAudioProcessor::applyProgramPreset(int programIndex)
+{
+    auto setParam = [&](const juce::String& paramId, float value)
+    {
+        if (auto* base = parameters.getParameter(paramId))
+        {
+            if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(base))
+            {
+                const auto normalised = ranged->convertTo0to1(value);
+                base->beginChangeGesture();
+                base->setValueNotifyingHost(normalised);
+                base->endChangeGesture();
+            }
+        }
+    };
+
+    switch (programIndex)
+    {
+        case 0: // 15 ips Color
+            setParam(ipsId, 0.0f);
+            setParam(calId, 1.0f);
+            setParam(inputId, 0.0f);
+            setParam(driveId, 1.18f);
+            setParam(outputId, -1.2f);
+            setParam(bleedId, 0.10f);
+            setParam(bleedThresholdId, -8.0f);
+            setParam(biasId, -0.08f);
+            setParam(headBumpFreqId, 78.0f);
+            setParam(headBumpAmtId, 1.10f);
+            setParam(printThroughId, 0.08f);
+            setParam(azimuthId, 0.22f);
+            setParam(wowFlutterOnId, 1.0f);
+            setParam(hissOnId, 0.0f);
+            break;
+        case 1: // 30 ips Clean
+            setParam(ipsId, 1.0f);
+            setParam(calId, 1.0f);
+            setParam(inputId, 0.0f);
+            setParam(driveId, 0.95f);
+            setParam(outputId, 0.0f);
+            setParam(bleedId, 0.05f);
+            setParam(bleedThresholdId, -6.0f);
+            setParam(biasId, 0.02f);
+            setParam(headBumpFreqId, 65.0f);
+            setParam(headBumpAmtId, 0.85f);
+            setParam(printThroughId, 0.03f);
+            setParam(azimuthId, 0.12f);
+            setParam(wowFlutterOnId, 0.0f);
+            setParam(hissOnId, 0.0f);
+            break;
+        default:
+            break;
+    }
+}
+
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool JuiceAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
@@ -297,7 +378,9 @@ void JuiceAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
             break;
     }
     const auto effInputGain  = inputGain * calInputTrim;
-    const auto effOutputGain = outputGain * calOutputTrim;
+    // Keep bypass/engaged loudness closer when drive is increased.
+    const auto driveCompDb = -(drive - 1.0f) * 1.9f;
+    const auto effOutputGain = outputGain * calOutputTrim * dbToGain(driveCompDb);
 
     // Print-through: ghost echo at tape layer separation distance
     const auto layerDelaySamples = ips <= 15.0f
@@ -480,80 +563,62 @@ float JuiceAudioProcessor::processTapeSample(float inputSample, TapeChannelState
     float biasParam, float headBumpFreqHz, float headBumpAmt) const
 {
     const auto twoPi = juce::MathConstants<float>::twoPi;
-    const auto fs = static_cast<float>(currentSampleRate);
+    const auto fs   = static_cast<float>(currentSampleRate);
 
-    // -----------------------------------------------------------------------
-    // Two-speed tape response model (Ampex 456 / MM1200 reference curves)
-    //
-    // 15 ips NAB:  resonant head-bump peak ~+1.5 dB @ 80-120 Hz,
-    //              flat mids 200 Hz - 8 kHz, -3 dB @ 12 kHz, -6 dB @ 20 kHz
-    // 30 ips IEC:  small LF shelf, flat mids, gentle HF rolloff
-    //              (existing voicing was already correct for this speed)
-    // -----------------------------------------------------------------------
-
-    // Narrow LP for head-bump / LF flux
+    // -----------------------------------------------------------------
+    // PRE-EMPHASIS  —  always at base sample rate (linear, OS-invariant)
+    // -----------------------------------------------------------------
     const auto bumpAlpha = std::exp(-twoPi * headBumpFreqHz / fs);
     state.flux = bumpAlpha * state.flux + (1.0f - bumpAlpha) * inputSample;
 
-    float preEmphasis;
-
+    float preEmphasis = 0.0f;
     if (ips <= 15.0f)
     {
-        // ---- 15 ips: resonant bandpass head bump ----
-        // headBump = LP_broad - LP_narrow  →  bandpass peaking at sqrt(broad × narrow)
-        // broad = headBumpFreqHz × 1.5625 → peak ≈ headBumpFreqHz × 1.25
-        // At default 80 Hz: broad = 125 Hz, peak ≈ sqrt(80 × 125) = 100 Hz  ✓
-        const auto bumpBroadHz    = headBumpFreqHz * 1.5625f;
-        const auto bumpBroadAlpha = std::exp(-twoPi * bumpBroadHz / fs);
-        state.hfMemory = bumpBroadAlpha * state.hfMemory + (1.0f - bumpBroadAlpha) * inputSample;
-        const auto headBump = state.hfMemory - state.flux;   // positive bandpass
+        const auto bumpBroadAlpha = std::exp(-twoPi * (headBumpFreqHz * 1.5625f) / fs);
+        state.hfMemory  = bumpBroadAlpha * state.hfMemory  + (1.0f - bumpBroadAlpha) * inputSample;
+        const auto headBump = state.hfMemory - state.flux;
 
-        // Very light HF shelf (the 12 kHz output LP provides the main cut)
         const auto shelfAlpha = std::exp(-twoPi * 5000.0f / fs);
         state.hfShelfLp = shelfAlpha * state.hfShelfLp + (1.0f - shelfAlpha) * inputSample;
-        const auto hfShelfContent = inputSample - state.hfShelfLp;
-        const auto hfScale = calHfBoost * (1.0f - biasParam * 0.60f);
+        const auto hfScale    = calHfBoost * (1.0f - biasParam * 0.60f);
 
-        // Final calibration: slightly lower bump so default peak is closer to
-        // classic 456 alignment (+1.5 to +2 dB, not +3 dB).
-        const auto bumpGain = 0.48f * headBumpAmt;
         preEmphasis = inputSample
-                    + headBump      * bumpGain
-                    + hfShelfContent * 0.04f * hfScale;
+                    + headBump * (0.48f * headBumpAmt)
+                    + (inputSample - state.hfShelfLp) * 0.04f * hfScale;
     }
     else
     {
-        // ---- 30 ips: existing voicing (already correct in analyzer) ----
         const auto memoryAlpha = std::exp(-twoPi * 12800.0f / fs);
-        state.hfMemory = memoryAlpha * state.hfMemory + (1.0f - memoryAlpha) * (inputSample - state.flux);
-        const auto shelfAlpha = std::exp(-twoPi * 7200.0f / fs);
+        state.hfMemory  = memoryAlpha * state.hfMemory  + (1.0f - memoryAlpha) * (inputSample - state.flux);
+        const auto shelfAlpha  = std::exp(-twoPi * 7200.0f / fs);
         state.hfShelfLp = shelfAlpha * state.hfShelfLp + (1.0f - shelfAlpha) * inputSample;
-        const auto hfShelfContent = inputSample - state.hfShelfLp;
         const auto hfScale = calHfBoost * (1.0f - biasParam * 0.60f);
+
         preEmphasis = inputSample
-                    + state.hfMemory * 0.33f * hfScale
-                    + hfShelfContent * 0.17f * hfScale;
+                    + state.hfMemory  * 0.33f * hfScale
+                    + (inputSample - state.hfShelfLp) * 0.17f * hfScale;
     }
 
-    const auto asymmetry = (0.018f - biasParam * 0.007f) * trackVariance;
-    const auto biasDC    = -biasParam * 0.020f;
-    // 30 ips keeps small direct flux; 15 ips flux is already in headBump term
-    const auto fluxGain      = ips <= 15.0f ? 0.0f : 0.20f;
+    // -----------------------------------------------------------------
+    // MAGNETIZATION  (linear part before the nonlinearity)
+    // -----------------------------------------------------------------
+    const auto asymmetry   = (0.018f - biasParam * 0.007f) * trackVariance;
+    const auto biasDC      = -biasParam * 0.020f;
+    const auto fluxGain    = ips <= 15.0f ? 0.0f : 0.20f;
     const auto magnetization = preEmphasis + asymmetry + state.flux * fluxGain * headBumpAmt + biasDC;
-
     const auto driveScaled = calSaturation * (1.0f + (-biasParam) * 0.18f);
+    const auto driveK      = 1.8f * trackVariance * driveScaled;
 
-    auto saturated = std::tanh(1.8f * trackVariance * driveScaled * magnetization);
-    saturated = 0.75f * saturated + 0.25f * std::tanh(3.1f * saturated);
+    auto lastSat = std::tanh(driveK * magnetization);
+    lastSat = 0.75f * lastSat + 0.25f * std::tanh(3.1f * lastSat);
 
-    // Output LP: IPS-dependent tape bandwidth limit.
-    // 15 ips: a little steeper than 12 kHz to better match observed 456 tops.
-    // 30 ips: -3 dB @ 22 kHz  →  barely audible at 20 kHz
+    // -----------------------------------------------------------------
+    // OUTPUT LP / DE-EMPHASIS  —  always at base sample rate
+    // -----------------------------------------------------------------
     const auto hfRolloffHz    = ips <= 15.0f ? 11000.0f : 22000.0f;
     const auto hfRolloffAlpha = std::exp(-twoPi * hfRolloffHz / fs);
-    state.tapeHfLp = hfRolloffAlpha * state.tapeHfLp + (1.0f - hfRolloffAlpha) * saturated;
+    state.tapeHfLp = hfRolloffAlpha * state.tapeHfLp + (1.0f - hfRolloffAlpha) * lastSat;
 
-    // 15 ips calibration trim: brings the mid-band reference closer to 0 dB.
     const auto ipsOutputTrim = ips <= 15.0f ? dbToGain(1.15f) : 1.0f;
     return state.tapeHfLp * ipsOutputTrim;
 }

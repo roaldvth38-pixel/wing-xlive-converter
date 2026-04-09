@@ -111,6 +111,12 @@ JuiceAudioProcessorEditor::JuiceAudioProcessorEditor(JuiceAudioProcessor& proces
 
     updateTrackLabel();
 
+    presetButton.setButtonText("Presets \xe2\x96\xbe");
+    presetButton.setColour(juce::TextButton::buttonColourId,  juce::Colour::fromRGB(70, 52, 32));
+    presetButton.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(245, 226, 196));
+    presetButton.onClick = [this] { showPresetMenu(); };
+    addAndMakeVisible(presetButton);
+
     setSize(620, 620);
 }
 
@@ -137,6 +143,10 @@ void JuiceAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(20);
     titleLabel.setBounds(area.removeFromTop(34));
+
+    auto presetRow = area.removeFromTop(28);
+    presetRow.removeFromTop(4);
+    presetButton.setBounds(presetRow.removeFromLeft(130).withTrimmedBottom(2));
 
     auto controlArea = area.removeFromTop(408);
     const int knobSize = 105;
@@ -168,19 +178,22 @@ void JuiceAudioProcessorEditor::resized()
               { &azimuthSlider,      &azimuthNameLabel }});
 
     auto bottom = area.removeFromTop(64);
-    auto leftBox = bottom.removeFromLeft(200);
-    trackLabel.setBounds(leftBox.removeFromLeft(95));
-    trackSelector.setBounds(leftBox);
+    const int boxWidth = 170;
+    const int boxGap = 12;
 
-    bottom.removeFromLeft(16);
-    auto midBox = bottom.removeFromLeft(165);
-    calLabel.setBounds(midBox.removeFromLeft(36));
-    calSelector.setBounds(midBox);
+    auto trackBox = bottom.removeFromLeft(boxWidth);
+    trackLabel.setBounds(trackBox.removeFromLeft(52));
+    trackSelector.setBounds(trackBox);
 
-    bottom.removeFromLeft(16);
-    auto rightBox = bottom.removeFromLeft(165);
-    ipsLabel.setBounds(rightBox.removeFromLeft(44));
-    ipsSelector.setBounds(rightBox);
+    bottom.removeFromLeft(boxGap);
+    auto calBox = bottom.removeFromLeft(boxWidth);
+    calLabel.setBounds(calBox.removeFromLeft(32));
+    calSelector.setBounds(calBox);
+
+    bottom.removeFromLeft(boxGap);
+    auto ipsBox = bottom.removeFromLeft(boxWidth);
+    ipsLabel.setBounds(ipsBox.removeFromLeft(34));
+    ipsSelector.setBounds(ipsBox);
 
     auto switches = area.removeFromTop(34);
     wowFlutterButton.setBounds(switches.removeFromLeft(170));
@@ -218,4 +231,73 @@ void JuiceAudioProcessorEditor::configureControlLabel(juce::Label& label, const 
 void JuiceAudioProcessorEditor::updateTrackLabel()
 {
     trackLabel.setText("Track " + juce::String(trackSelector.getSelectedId()), juce::dontSendNotification);
+}
+
+void JuiceAudioProcessorEditor::showPresetMenu()
+{
+    juce::PopupMenu menu;
+
+    menu.addSectionHeader("Built-in Presets");
+    menu.addItem(1, "15 ips Color");
+    menu.addItem(2, "30 ips Clean");
+    menu.addSeparator();
+    menu.addItem(10, "Save Preset...");
+    menu.addItem(11, "Load Preset...");
+
+    menu.showMenuAsync(juce::PopupMenu::Options{}.withTargetComponent(&presetButton),
+        [this](int result)
+        {
+            if (result >= 1 && result <= 2)
+                audioProcessor.setCurrentProgram(result - 1);
+            else if (result == 10)
+                savePreset();
+            else if (result == 11)
+                loadPreset();
+        });
+}
+
+void JuiceAudioProcessorEditor::savePreset()
+{
+    currentFileChooser = std::make_shared<juce::FileChooser>(
+        "Save MM1200 Preset",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("MM1200 Presets"),
+        "*.mm1200");
+
+    currentFileChooser->launchAsync(
+        juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file != juce::File{})
+            {
+                if (auto xml = audioProcessor.getValueTreeState().copyState().createXml())
+                    file.replaceWithText(xml->toString());
+            }
+        });
+}
+
+void JuiceAudioProcessorEditor::loadPreset()
+{
+    currentFileChooser = std::make_shared<juce::FileChooser>(
+        "Load MM1200 Preset",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("MM1200 Presets"),
+        "*.mm1200");
+
+    currentFileChooser->launchAsync(
+        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file != juce::File{} && file.existsAsFile())
+            {
+                if (auto xml = juce::XmlDocument::parse(file))
+                {
+                    if (xml->hasTagName(audioProcessor.getValueTreeState().state.getType()))
+                        audioProcessor.getValueTreeState().replaceState(
+                            juce::ValueTree::fromXml(*xml));
+                }
+            }
+        });
 }

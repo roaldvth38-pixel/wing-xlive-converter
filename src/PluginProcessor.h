@@ -29,10 +29,10 @@ public:
     bool isMidiEffect() const override { return JucePlugin_IsMidiEffect; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram(int) override;
+    const juce::String getProgramName(int) override;
     void changeProgramName(int, const juce::String&) override {}
 
     void getStateInformation(juce::MemoryBlock& destData) override;
@@ -67,8 +67,10 @@ private:
     float processTapeSample(float inputSample, TapeChannelState& state, float trackVariance,
                              float ips, float calSaturation, float calHfBoost,
                              float biasParam, float headBumpFreqHz, float headBumpAmt) const;
+    void applyProgramPreset(int programIndex);
 
     APVTS parameters;
+    int currentProgram = 0;
     std::vector<TapeChannelState> channelStates;
     std::array<float, 24> trackVarianceTable {};
     std::vector<std::vector<float>> wowDelayBuffers;

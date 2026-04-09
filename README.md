@@ -36,6 +36,23 @@ The compiled VST3 plugin is generated in the build output folders created by CMa
 - Default setting fetches JUCE automatically during CMake configure.
 - To use a local JUCE checkout or package, set `JUCE_FETCH=OFF` and provide JUCE through `find_package`.
 
+## Production Workflow
+
+The plugin now ships with two built-in host programs:
+
+- `15 ips Color`
+- `30 ips Clean`
+
+### Validation Checklist
+
+Use this quick pass before printing/finalizing:
+
+1. Gain-match bypass vs engaged within about 0.5 dB.
+2. Check both `15 ips` and `30 ips` on full-range material.
+3. Sweep `Azimuth` from subtle to extreme and verify no unstable image collapse.
+4. Validate preset save/load roundtrip with the `Presets` menu in the plugin UI.
+5. Confirm host program switching shows only `15 ips Color` and `30 ips Clean`.
+
 ## Troubleshooting
 
 ### "Workspace is not configured" in Debug/Run
