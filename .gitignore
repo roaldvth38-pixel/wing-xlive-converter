@@ -1,0 +1,18 @@
+# Build folders
+build/
+cmake-build-*/
+
+# CMake generated
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Makefile
+
+# IDE
+.vs/
+.vscode/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
