@@ -1,0 +1,156 @@
+name: Build Release Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_version:
+        description: "Version label used in artifact/release names"
+        required: false
+        default: "1.0.0"
+      sign_and_notarize_macos:
+        description: "Sign and notarize macOS package (requires secrets)"
+        type: boolean
+        required: true
+        default: false
+      create_github_release:
+        description: "Create a GitHub Release and attach installers"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-installer:
+    name: Build Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Build Windows installer
+        shell: powershell
+        run: |
+          $baseName = "WingXLIVEConverterSetup_${{ inputs.app_version }}_${{ github.run_number }}"
+          ./package_wing_xlive_converter_installer.ps1 -InstallerBaseName $baseName
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WingXLIVEConverter-windows-installer
+          path: release/installer/WingXLIVEConverterSetup*.exe
+          if-no-files-found: error
+
+      - name: Upload Windows portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WingXLIVEConverter-windows-portable
+          path: release/portable/**
+          if-no-files-found: error
+
+  build-macos-installer:
+    name: Build macOS Installer
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build unsigned macOS PKG
+        if: ${{ !inputs.sign_and_notarize_macos }}
+        shell: bash
+        run: |
+          chmod +x ./build_wing_xlive_converter_mac_app.sh ./package_wing_xlive_converter_mac_installer.sh
+          ./package_wing_xlive_converter_mac_installer.sh --app-version "${{ inputs.app_version }}"
+
+      - name: Build signed and notarized macOS PKG
+        if: ${{ inputs.sign_and_notarize_macos }}
+        shell: bash
+        env:
+          SIGN_APP_IDENTITY: ${{ secrets.MAC_SIGN_APP_IDENTITY }}
+          SIGN_INSTALLER_IDENTITY: ${{ secrets.MAC_SIGN_INSTALLER_IDENTITY }}
+          NOTARIZE_PROFILE: ${{ secrets.MAC_NOTARIZE_PROFILE }}
+        run: |
+          if [[ -z "$SIGN_APP_IDENTITY" || -z "$SIGN_INSTALLER_IDENTITY" || -z "$NOTARIZE_PROFILE" ]]; then
+            echo "Missing required signing/notarization secrets."
+            echo "Expected: MAC_SIGN_APP_IDENTITY, MAC_SIGN_INSTALLER_IDENTITY, MAC_NOTARIZE_PROFILE"
+            exit 1
+          fi
+
+          chmod +x ./build_wing_xlive_converter_mac_app.sh ./package_wing_xlive_converter_mac_installer.sh
+          ./package_wing_xlive_converter_mac_installer.sh \
+            --app-version "${{ inputs.app_version }}" \
+            --sign-app-identity "$SIGN_APP_IDENTITY" \
+            --sign-installer-identity "$SIGN_INSTALLER_IDENTITY" \
+            --notarize-profile "$NOTARIZE_PROFILE"
+
+      - name: Upload macOS PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WingXLIVEConverter-macos-pkg
+          path: release/installer-macos/*.pkg
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    if: ${{ inputs.create_github_release }}
+    runs-on: ubuntu-latest
+    needs:
+      - build-windows-installer
+      - build-macos-installer
+
+    steps:
+      - name: Download Windows installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WingXLIVEConverter-windows-installer
+          path: release-assets/windows-installer
+
+      - name: Download Windows portable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WingXLIVEConverter-windows-portable
+          path: release-assets/windows-portable
+
+      - name: Download macOS PKG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WingXLIVEConverter-macos-pkg
+          path: release-assets/macos-pkg
+
+      - name: Create release tag
+        id: release_meta
+        shell: bash
+        run: |
+          TAG="v${{ inputs.app_version }}-run${{ github.run_number }}"
+          NAME="Wing XLIVE Converter ${{ inputs.app_version }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.name }}
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/windows-installer/*.exe
+            release-assets/macos-pkg/*.pkg

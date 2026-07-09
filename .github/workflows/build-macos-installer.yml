@@ -1,0 +1,62 @@
+name: Build macOS Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_version:
+        description: "App version for PKG filename"
+        required: false
+        default: "1.0.0"
+      sign_and_notarize:
+        description: "Sign and notarize (requires secrets)"
+        type: boolean
+        required: true
+        default: false
+
+jobs:
+  build-macos-installer:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build unsigned macOS PKG
+        if: ${{ !inputs.sign_and_notarize }}
+        shell: bash
+        run: |
+          chmod +x ./build_wing_xlive_converter_mac_app.sh ./package_wing_xlive_converter_mac_installer.sh
+          ./package_wing_xlive_converter_mac_installer.sh --app-version "${{ inputs.app_version }}"
+
+      - name: Build signed and notarized macOS PKG
+        if: ${{ inputs.sign_and_notarize }}
+        shell: bash
+        env:
+          SIGN_APP_IDENTITY: ${{ secrets.MAC_SIGN_APP_IDENTITY }}
+          SIGN_INSTALLER_IDENTITY: ${{ secrets.MAC_SIGN_INSTALLER_IDENTITY }}
+          NOTARIZE_PROFILE: ${{ secrets.MAC_NOTARIZE_PROFILE }}
+        run: |
+          if [[ -z "$SIGN_APP_IDENTITY" || -z "$SIGN_INSTALLER_IDENTITY" || -z "$NOTARIZE_PROFILE" ]]; then
+            echo "Missing required signing/notarization secrets."
+            echo "Expected: MAC_SIGN_APP_IDENTITY, MAC_SIGN_INSTALLER_IDENTITY, MAC_NOTARIZE_PROFILE"
+            exit 1
+          fi
+
+          chmod +x ./build_wing_xlive_converter_mac_app.sh ./package_wing_xlive_converter_mac_installer.sh
+          ./package_wing_xlive_converter_mac_installer.sh \
+            --app-version "${{ inputs.app_version }}" \
+            --sign-app-identity "$SIGN_APP_IDENTITY" \
+            --sign-installer-identity "$SIGN_INSTALLER_IDENTITY" \
+            --notarize-profile "$NOTARIZE_PROFILE"
+
+      - name: Upload PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WingXLIVEConverter-macOS-pkg
+          path: release/installer-macos/*.pkg
+          if-no-files-found: error
