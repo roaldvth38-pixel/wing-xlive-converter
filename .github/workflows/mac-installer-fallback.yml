@@ -1,0 +1,30 @@
+name: macOS Installer Fallback
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-macos-installer:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build macOS installer pkg
+        shell: bash
+        run: |
+          chmod +x ./build_wing_xlive_converter_mac_app.sh ./package_wing_xlive_converter_mac_installer.sh
+          ./package_wing_xlive_converter_mac_installer.sh --app-version "1.0.0"
+
+      - name: Upload macOS pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WingXLIVEConverter-macOS-pkg
+          path: release/installer-macos/*.pkg
+          if-no-files-found: error
