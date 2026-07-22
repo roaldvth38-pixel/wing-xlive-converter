@@ -49,15 +49,41 @@ jobs:
             VERSION="0.1.0"
           fi
 
+          if grep -q "juce_add_plugin(BassChannelStrip" CMakeLists.txt && [[ -f "src/basschannelstrip/BassChannelStripProcessor.cpp" ]]; then
+            PLUGIN_TARGET="BassChannelStrip_VST3"
+            PLUGIN_BUNDLE_NAME="Bass Channel Strip.vst3"
+            PACKAGE_NAME="BassChannelStrip_VST3"
+            PKG_ID="com.audioplugincreator.basschannelstrip.vst3"
+            ARTIFACT_NAME="BassChannelStrip-macos-pkg"
+          elif grep -q "juce_add_plugin(Juice" CMakeLists.txt && [[ -f "src/PluginProcessor.cpp" ]]; then
+            PLUGIN_TARGET="Juice_VST3"
+            PLUGIN_BUNDLE_NAME="Juice.vst3"
+            PACKAGE_NAME="Juice_VST3"
+            PKG_ID="com.audioplugincreator.juice.vst3"
+            ARTIFACT_NAME="Juice-macos-pkg"
+          else
+            echo "No supported JUCE plugin target found in repository."
+            echo "Expected BassChannelStrip or Juice targets."
+            exit 1
+          fi
+
+          echo "Selected target: ${PLUGIN_TARGET}"
+          echo "Selected bundle: ${PLUGIN_BUNDLE_NAME}"
+
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "sign_pkg=${SIGN_PKG}" >> "$GITHUB_OUTPUT"
+          echo "plugin_target=${PLUGIN_TARGET}" >> "$GITHUB_OUTPUT"
+          echo "plugin_bundle_name=${PLUGIN_BUNDLE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "pkg_id=${PKG_ID}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Configure CMake (Ninja, Release)
         shell: bash
         run: |
           cmake -S . -B build-mac -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build unsigned BassChannelStrip macOS PKG
+      - name: Build unsigned macOS PKG
         if: ${{ steps.meta.outputs.sign_pkg != 'true' }}
         shell: bash
         run: |
@@ -65,9 +91,13 @@ jobs:
           ./package_basschannelstrip_vst3_mac_installer.sh \
             --version "${{ steps.meta.outputs.version }}" \
             --build-dir ./build-mac \
-            --config Release
+            --config Release \
+            --plugin-target "${{ steps.meta.outputs.plugin_target }}" \
+            --plugin-bundle-name "${{ steps.meta.outputs.plugin_bundle_name }}" \
+            --package-name "${{ steps.meta.outputs.package_name }}" \
+            --pkg-id "${{ steps.meta.outputs.pkg_id }}"
 
-      - name: Build signed BassChannelStrip macOS PKG
+      - name: Build signed macOS PKG
         if: ${{ steps.meta.outputs.sign_pkg == 'true' }}
         shell: bash
         env:
@@ -85,12 +115,16 @@ jobs:
             --version "${{ steps.meta.outputs.version }}" \
             --build-dir ./build-mac \
             --config Release \
+            --plugin-target "${{ steps.meta.outputs.plugin_target }}" \
+            --plugin-bundle-name "${{ steps.meta.outputs.plugin_bundle_name }}" \
+            --package-name "${{ steps.meta.outputs.package_name }}" \
+            --pkg-id "${{ steps.meta.outputs.pkg_id }}" \
             --sign-app-identity "$SIGN_APP_IDENTITY" \
             --sign-installer-identity "$SIGN_INSTALLER_IDENTITY"
 
       - name: Upload macOS PKG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BassChannelStrip-macos-pkg
+          name: ${{ steps.meta.outputs.artifact_name }}
           path: release/installer-macos/*.pkg
           if-no-files-found: error

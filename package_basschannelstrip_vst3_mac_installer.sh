@@ -12,6 +12,9 @@ BUILD_DIR="${REPO_ROOT}/build"
 SKIP_BUILD=0
 SKIP_INSTALLER=0
 OUTPUT_DIR="${REPO_ROOT}/release/installer-macos"
+PLUGIN_TARGET="BassChannelStrip_VST3"
+PLUGIN_BUNDLE_NAME="Bass Channel Strip.vst3"
+PACKAGE_NAME="BassChannelStrip_VST3"
 PKG_ID="com.audioplugincreator.basschannelstrip.vst3"
 INSTALL_LOCATION="/Library/Audio/Plug-Ins/VST3"
 SIGN_APP_IDENTITY=""
@@ -29,6 +32,10 @@ Options:
   --config <Release|Debug>           Build configuration (default: Release)
   --build-preset <name>              CMake build preset to use (optional)
   --build-dir <path>                 CMake build directory (default: ./build)
+  --plugin-target <target>           CMake VST3 target (default: BassChannelStrip_VST3)
+  --plugin-bundle-name <name.vst3>   Plugin bundle folder name (default: Bass Channel Strip.vst3)
+  --package-name <name>              Package file prefix (default: BassChannelStrip_VST3)
+  --pkg-id <identifier>              pkgbuild identifier (default: com.audioplugincreator.basschannelstrip.vst3)
   --output-dir <path>                Installer output directory
   --skip-build                       Skip CMake build step
   --skip-installer                   Validate build artifact only
@@ -40,7 +47,7 @@ Notes:
   - Run this script on macOS.
   - Requires: cmake, pkgbuild, productbuild
   - The plugin bundle is expected at:
-    build/BassChannelStrip_artefacts/<config>/VST3/Bass Channel Strip.vst3
+    build/<target_without_VST3>_artefacts/<config>/VST3/<bundle_name>.vst3
 EOF
 }
 
@@ -60,6 +67,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --build-dir)
       BUILD_DIR="$2"
+      shift 2
+      ;;
+    --plugin-target)
+      PLUGIN_TARGET="$2"
+      shift 2
+      ;;
+    --plugin-bundle-name)
+      PLUGIN_BUNDLE_NAME="$2"
+      shift 2
+      ;;
+    --package-name)
+      PACKAGE_NAME="$2"
+      shift 2
+      ;;
+    --pkg-id)
+      PKG_ID="$2"
       shift 2
       ;;
     --output-dir)
@@ -99,18 +122,22 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
+TARGET_STEM="${PLUGIN_TARGET%_VST3}"
+ARTEFACTS_DIR="${TARGET_STEM}_artefacts"
+PLUGIN_BUNDLE_LEAF="${PLUGIN_BUNDLE_NAME}"
+
 if [[ ${SKIP_BUILD} -eq 0 ]]; then
-  echo "Building BassChannelStrip_VST3 (${BUILD_CONFIG}) ..."
+  echo "Building ${PLUGIN_TARGET} (${BUILD_CONFIG}) ..."
   if [[ -n "${BUILD_PRESET}" ]]; then
-    cmake --build --preset "${BUILD_PRESET}" --config "${BUILD_CONFIG}" --target BassChannelStrip_VST3
+    cmake --build --preset "${BUILD_PRESET}" --config "${BUILD_CONFIG}" --target "${PLUGIN_TARGET}"
   else
-    cmake --build "${BUILD_DIR}" --config "${BUILD_CONFIG}" --target BassChannelStrip_VST3
+    cmake --build "${BUILD_DIR}" --config "${BUILD_CONFIG}" --target "${PLUGIN_TARGET}"
   fi
 fi
 
-PLUGIN_BUNDLE="${BUILD_DIR}/BassChannelStrip_artefacts/${BUILD_CONFIG}/VST3/Bass Channel Strip.vst3"
+PLUGIN_BUNDLE="${BUILD_DIR}/${ARTEFACTS_DIR}/${BUILD_CONFIG}/VST3/${PLUGIN_BUNDLE_LEAF}"
 if [[ ! -d "${PLUGIN_BUNDLE}" ]]; then
-  PLUGIN_BUNDLE="${BUILD_DIR}/BassChannelStrip_artefacts/VST3/Bass Channel Strip.vst3"
+  PLUGIN_BUNDLE="${BUILD_DIR}/${ARTEFACTS_DIR}/VST3/${PLUGIN_BUNDLE_LEAF}"
 fi
 
 if [[ ! -d "${PLUGIN_BUNDLE}" ]]; then
@@ -142,13 +169,13 @@ cp -R "${PLUGIN_BUNDLE}" "${STAGING_ROOT}${INSTALL_LOCATION}/"
 
 if [[ -n "${SIGN_APP_IDENTITY}" ]]; then
   echo "Codesigning plugin bundle ..."
-  codesign --force --deep --options runtime --sign "${SIGN_APP_IDENTITY}" "${STAGING_ROOT}${INSTALL_LOCATION}/Bass Channel Strip.vst3"
+  codesign --force --deep --options runtime --sign "${SIGN_APP_IDENTITY}" "${STAGING_ROOT}${INSTALL_LOCATION}/${PLUGIN_BUNDLE_LEAF}"
 fi
 
 mkdir -p "${OUTPUT_DIR}"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-COMPONENT_PKG="${TMP_ROOT}/BassChannelStrip_VST3_component.pkg"
-FINAL_PKG="${OUTPUT_DIR}/BassChannelStrip_VST3_${VERSION}_${TIMESTAMP}.pkg"
+COMPONENT_PKG="${TMP_ROOT}/${PACKAGE_NAME}_component.pkg"
+FINAL_PKG="${OUTPUT_DIR}/${PACKAGE_NAME}_${VERSION}_${TIMESTAMP}.pkg"
 
 pkgbuild \
   --root "${STAGING_ROOT}" \
