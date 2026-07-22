@@ -1,0 +1,96 @@
+name: Build BassChannelStrip macOS Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin_version:
+        description: "Version label for generated PKG filename"
+        required: false
+        default: "0.1.0"
+      sign_pkg:
+        description: "Sign plugin bundle and installer package (requires secrets)"
+        type: boolean
+        required: true
+        default: false
+  push:
+    tags:
+      - "v*"
+  release:
+    types:
+      - published
+
+jobs:
+  build-macos-installer:
+    name: Build macOS PKG
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve workflow inputs
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.plugin_version }}"
+            SIGN_PKG="${{ inputs.sign_pkg }}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            SIGN_PKG="false"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            SIGN_PKG="false"
+          fi
+
+          VERSION="${VERSION#v}"
+
+          if [[ -z "${VERSION}" ]]; then
+            VERSION="0.1.0"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sign_pkg=${SIGN_PKG}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake (Ninja, Release)
+        shell: bash
+        run: |
+          cmake -S . -B build-mac -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build unsigned BassChannelStrip macOS PKG
+        if: ${{ steps.meta.outputs.sign_pkg != 'true' }}
+        shell: bash
+        run: |
+          chmod +x ./package_basschannelstrip_vst3_mac_installer.sh
+          ./package_basschannelstrip_vst3_mac_installer.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --build-dir ./build-mac \
+            --config Release
+
+      - name: Build signed BassChannelStrip macOS PKG
+        if: ${{ steps.meta.outputs.sign_pkg == 'true' }}
+        shell: bash
+        env:
+          SIGN_APP_IDENTITY: ${{ secrets.MAC_SIGN_APP_IDENTITY }}
+          SIGN_INSTALLER_IDENTITY: ${{ secrets.MAC_SIGN_INSTALLER_IDENTITY }}
+        run: |
+          if [[ -z "$SIGN_APP_IDENTITY" || -z "$SIGN_INSTALLER_IDENTITY" ]]; then
+            echo "Missing required signing secrets."
+            echo "Expected: MAC_SIGN_APP_IDENTITY and MAC_SIGN_INSTALLER_IDENTITY"
+            exit 1
+          fi
+
+          chmod +x ./package_basschannelstrip_vst3_mac_installer.sh
+          ./package_basschannelstrip_vst3_mac_installer.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --build-dir ./build-mac \
+            --config Release \
+            --sign-app-identity "$SIGN_APP_IDENTITY" \
+            --sign-installer-identity "$SIGN_INSTALLER_IDENTITY"
+
+      - name: Upload macOS PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BassChannelStrip-macos-pkg
+          path: release/installer-macos/*.pkg
+          if-no-files-found: error
