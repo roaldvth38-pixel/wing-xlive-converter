@@ -14,6 +14,7 @@ SKIP_INSTALLER=0
 OUTPUT_DIR="${REPO_ROOT}/release/installer-macos"
 PLUGIN_TARGET="BassChannelStrip_VST3"
 PLUGIN_BUNDLE_NAME="Bass Channel Strip.vst3"
+INSTALL_BUNDLE_NAME=""
 PACKAGE_NAME="BassChannelStrip_VST3"
 PKG_ID="com.audioplugincreator.basschannelstrip.vst3"
 INSTALL_LOCATION="/Library/Audio/Plug-Ins/VST3"
@@ -33,7 +34,8 @@ Options:
   --build-preset <name>              CMake build preset to use (optional)
   --build-dir <path>                 CMake build directory (default: ./build)
   --plugin-target <target>           CMake VST3 target (default: BassChannelStrip_VST3)
-  --plugin-bundle-name <name.vst3>   Plugin bundle folder name (default: Bass Channel Strip.vst3)
+  --plugin-bundle-name <name.vst3>   Source bundle folder name from build output (default: Bass Channel Strip.vst3)
+  --install-bundle-name <name.vst3>  Bundle folder name written into installer (default: source bundle name)
   --package-name <name>              Package file prefix (default: BassChannelStrip_VST3)
   --pkg-id <identifier>              pkgbuild identifier (default: com.audioplugincreator.basschannelstrip.vst3)
   --output-dir <path>                Installer output directory
@@ -75,6 +77,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --plugin-bundle-name)
       PLUGIN_BUNDLE_NAME="$2"
+      shift 2
+      ;;
+    --install-bundle-name)
+      INSTALL_BUNDLE_NAME="$2"
       shift 2
       ;;
     --package-name)
@@ -122,9 +128,14 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
+if [[ -z "${INSTALL_BUNDLE_NAME}" ]]; then
+  INSTALL_BUNDLE_NAME="${PLUGIN_BUNDLE_NAME}"
+fi
+
 TARGET_STEM="${PLUGIN_TARGET%_VST3}"
 ARTEFACTS_DIR="${TARGET_STEM}_artefacts"
 PLUGIN_BUNDLE_LEAF="${PLUGIN_BUNDLE_NAME}"
+INSTALL_BUNDLE_LEAF="${INSTALL_BUNDLE_NAME}"
 
 if [[ ${SKIP_BUILD} -eq 0 ]]; then
   echo "Building ${PLUGIN_TARGET} (${BUILD_CONFIG}) ..."
@@ -144,6 +155,9 @@ if [[ ! -d "${PLUGIN_BUNDLE}" ]]; then
   echo "VST3 bundle not found: ${PLUGIN_BUNDLE}" >&2
   exit 1
 fi
+
+echo "Packaging source bundle: ${PLUGIN_BUNDLE_LEAF}"
+echo "Installer bundle name: ${INSTALL_BUNDLE_LEAF}"
 
 if [[ ${SKIP_INSTALLER} -eq 1 ]]; then
   echo "Build artifact verified. Skipping installer generation."
@@ -165,11 +179,12 @@ TMP_ROOT="$(mktemp -d)"
 STAGING_ROOT="${TMP_ROOT}/staging"
 mkdir -p "${STAGING_ROOT}${INSTALL_LOCATION}"
 
-cp -R "${PLUGIN_BUNDLE}" "${STAGING_ROOT}${INSTALL_LOCATION}/"
+INSTALL_BUNDLE_PATH="${STAGING_ROOT}${INSTALL_LOCATION}/${INSTALL_BUNDLE_LEAF}"
+cp -R "${PLUGIN_BUNDLE}" "${INSTALL_BUNDLE_PATH}"
 
 if [[ -n "${SIGN_APP_IDENTITY}" ]]; then
   echo "Codesigning plugin bundle ..."
-  codesign --force --deep --options runtime --sign "${SIGN_APP_IDENTITY}" "${STAGING_ROOT}${INSTALL_LOCATION}/${PLUGIN_BUNDLE_LEAF}"
+  codesign --force --deep --options runtime --sign "${SIGN_APP_IDENTITY}" "${INSTALL_BUNDLE_PATH}"
 fi
 
 mkdir -p "${OUTPUT_DIR}"

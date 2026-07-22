@@ -51,16 +51,18 @@ jobs:
 
           if grep -q "juce_add_plugin(BassChannelStrip" CMakeLists.txt && [[ -f "src/basschannelstrip/BassChannelStripProcessor.cpp" ]]; then
             PLUGIN_TARGET="BassChannelStrip_VST3"
-            PLUGIN_BUNDLE_NAME="Bass Channel Strip.vst3"
-            PACKAGE_NAME="BassChannelStrip_VST3"
+            SOURCE_BUNDLE_NAME="Bass Channel Strip.vst3"
+            INSTALL_BUNDLE_NAME="Bass Channelstrip.vst3"
+            PACKAGE_NAME="BassChannelstrip_VST3"
             PKG_ID="com.audioplugincreator.basschannelstrip.vst3"
-            ARTIFACT_NAME="BassChannelStrip-macos-pkg"
+            ARTIFACT_NAME="BassChannelstrip-macos-pkg"
           elif grep -q "juce_add_plugin(Juice" CMakeLists.txt && [[ -f "src/PluginProcessor.cpp" ]]; then
             PLUGIN_TARGET="Juice_VST3"
-            PLUGIN_BUNDLE_NAME="Juice.vst3"
-            PACKAGE_NAME="Juice_VST3"
-            PKG_ID="com.audioplugincreator.juice.vst3"
-            ARTIFACT_NAME="Juice-macos-pkg"
+            SOURCE_BUNDLE_NAME="Juice.vst3"
+            INSTALL_BUNDLE_NAME="Bass Channelstrip.vst3"
+            PACKAGE_NAME="BassChannelstrip_VST3"
+            PKG_ID="com.audioplugincreator.basschannelstrip.vst3"
+            ARTIFACT_NAME="BassChannelstrip-macos-pkg"
           else
             echo "No supported JUCE plugin target found in repository."
             echo "Expected BassChannelStrip or Juice targets."
@@ -68,12 +70,14 @@ jobs:
           fi
 
           echo "Selected target: ${PLUGIN_TARGET}"
-          echo "Selected bundle: ${PLUGIN_BUNDLE_NAME}"
+          echo "Source bundle: ${SOURCE_BUNDLE_NAME}"
+          echo "Installer bundle: ${INSTALL_BUNDLE_NAME}"
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "sign_pkg=${SIGN_PKG}" >> "$GITHUB_OUTPUT"
           echo "plugin_target=${PLUGIN_TARGET}" >> "$GITHUB_OUTPUT"
-          echo "plugin_bundle_name=${PLUGIN_BUNDLE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "source_bundle_name=${SOURCE_BUNDLE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "install_bundle_name=${INSTALL_BUNDLE_NAME}" >> "$GITHUB_OUTPUT"
           echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
           echo "pkg_id=${PKG_ID}" >> "$GITHUB_OUTPUT"
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
@@ -93,7 +97,8 @@ jobs:
             --build-dir ./build-mac \
             --config Release \
             --plugin-target "${{ steps.meta.outputs.plugin_target }}" \
-            --plugin-bundle-name "${{ steps.meta.outputs.plugin_bundle_name }}" \
+            --plugin-bundle-name "${{ steps.meta.outputs.source_bundle_name }}" \
+            --install-bundle-name "${{ steps.meta.outputs.install_bundle_name }}" \
             --package-name "${{ steps.meta.outputs.package_name }}" \
             --pkg-id "${{ steps.meta.outputs.pkg_id }}"
 
@@ -116,7 +121,8 @@ jobs:
             --build-dir ./build-mac \
             --config Release \
             --plugin-target "${{ steps.meta.outputs.plugin_target }}" \
-            --plugin-bundle-name "${{ steps.meta.outputs.plugin_bundle_name }}" \
+            --plugin-bundle-name "${{ steps.meta.outputs.source_bundle_name }}" \
+            --install-bundle-name "${{ steps.meta.outputs.install_bundle_name }}" \
             --package-name "${{ steps.meta.outputs.package_name }}" \
             --pkg-id "${{ steps.meta.outputs.pkg_id }}" \
             --sign-app-identity "$SIGN_APP_IDENTITY" \

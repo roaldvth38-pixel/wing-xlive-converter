@@ -100,7 +100,7 @@ Or with a CMake build preset:
 
 Output location:
 
-- `release/installer-macos/BassChannelStrip_VST3_<version>_<timestamp>.pkg`
+- `release/installer-macos/BassChannelstrip_VST3_<version>_<timestamp>.pkg`
 
 ### Build macOS installer via GitHub Actions
 
@@ -120,7 +120,7 @@ Target selection behavior:
 
 1. If BassChannelStrip sources/target exist, it builds and packages `BassChannelStrip_VST3`.
 2. Otherwise it falls back to `Juice_VST3`.
-3. Artifact name reflects the selected plugin (`BassChannelStrip-macos-pkg` or `Juice-macos-pkg`).
+3. Output naming is always Bass Channelstrip (`BassChannelstrip_VST3...pkg` and `BassChannelstrip-macos-pkg`).
 
 Automatic trigger:
 
