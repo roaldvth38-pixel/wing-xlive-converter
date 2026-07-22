@@ -16,6 +16,9 @@ PKG_ID="com.audioplugincreator.basschannelstrip.vst3"
 INSTALL_LOCATION="/Library/Audio/Plug-Ins/VST3"
 SIGN_APP_IDENTITY=""
 SIGN_INSTALLER_IDENTITY=""
+PLUGIN_TARGET="Juice_VST3"
+PLUGIN_ARTEFACT_DIR="Juice_artefacts"
+PLUGIN_BUNDLE_NAME="Juice.vst3"
 
 usage() {
   cat <<'EOF'
@@ -40,7 +43,7 @@ Notes:
   - Run this script on macOS.
   - Requires: cmake, pkgbuild, productbuild
   - The plugin bundle is expected at:
-    build/BassChannelStrip_artefacts/<config>/VST3/Bass Channel Strip.vst3
+    build/Juice_artefacts/<config>/VST3/Juice.vst3
 EOF
 }
 
@@ -100,17 +103,17 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 if [[ ${SKIP_BUILD} -eq 0 ]]; then
-  echo "Building BassChannelStrip_VST3 (${BUILD_CONFIG}) ..."
+  echo "Building ${PLUGIN_TARGET} (${BUILD_CONFIG}) ..."
   if [[ -n "${BUILD_PRESET}" ]]; then
-    cmake --build --preset "${BUILD_PRESET}" --config "${BUILD_CONFIG}" --target BassChannelStrip_VST3
+    cmake --build --preset "${BUILD_PRESET}" --config "${BUILD_CONFIG}" --target "${PLUGIN_TARGET}"
   else
-    cmake --build "${BUILD_DIR}" --config "${BUILD_CONFIG}" --target BassChannelStrip_VST3
+    cmake --build "${BUILD_DIR}" --config "${BUILD_CONFIG}" --target "${PLUGIN_TARGET}"
   fi
 fi
 
-PLUGIN_BUNDLE="${BUILD_DIR}/BassChannelStrip_artefacts/${BUILD_CONFIG}/VST3/Bass Channel Strip.vst3"
+PLUGIN_BUNDLE="${BUILD_DIR}/${PLUGIN_ARTEFACT_DIR}/${BUILD_CONFIG}/VST3/${PLUGIN_BUNDLE_NAME}"
 if [[ ! -d "${PLUGIN_BUNDLE}" ]]; then
-  PLUGIN_BUNDLE="${BUILD_DIR}/BassChannelStrip_artefacts/VST3/Bass Channel Strip.vst3"
+  PLUGIN_BUNDLE="${BUILD_DIR}/${PLUGIN_ARTEFACT_DIR}/VST3/${PLUGIN_BUNDLE_NAME}"
 fi
 
 if [[ ! -d "${PLUGIN_BUNDLE}" ]]; then
@@ -142,7 +145,7 @@ cp -R "${PLUGIN_BUNDLE}" "${STAGING_ROOT}${INSTALL_LOCATION}/"
 
 if [[ -n "${SIGN_APP_IDENTITY}" ]]; then
   echo "Codesigning plugin bundle ..."
-  codesign --force --deep --options runtime --sign "${SIGN_APP_IDENTITY}" "${STAGING_ROOT}${INSTALL_LOCATION}/Bass Channel Strip.vst3"
+  codesign --force --deep --options runtime --sign "${SIGN_APP_IDENTITY}" "${STAGING_ROOT}${INSTALL_LOCATION}/${PLUGIN_BUNDLE_NAME}"
 fi
 
 mkdir -p "${OUTPUT_DIR}"
