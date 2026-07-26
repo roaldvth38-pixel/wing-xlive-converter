@@ -12,6 +12,11 @@ on:
         type: boolean
         required: true
         default: false
+      sign_dolby740_macos_pkg:
+        description: "Sign Dolby740 macOS package (requires signing secrets)"
+        type: boolean
+        required: true
+        default: false
       create_github_release:
         description: "Create a GitHub Release and attach installers"
         type: boolean
@@ -108,6 +113,78 @@ jobs:
           path: release/installer-macos/*.pkg
           if-no-files-found: error
 
+  build-dolby740-macos-installer:
+    name: Build Dolby740 macOS Installer
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Dolby740 target exists
+        shell: bash
+        run: |
+          if ! grep -q "juce_add_plugin(Dolby740" CMakeLists.txt; then
+            echo "Missing juce_add_plugin(Dolby740 ...) in CMakeLists.txt"
+            exit 1
+          fi
+
+          if [[ ! -f "src/dolby740/Dolby740Processor.cpp" ]]; then
+            echo "Missing source file: src/dolby740/Dolby740Processor.cpp"
+            exit 1
+          fi
+
+      - name: Configure CMake (Ninja, Release)
+        shell: bash
+        run: |
+          cmake -S . -B build-mac-dolby -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build unsigned Dolby740 macOS PKG
+        if: ${{ !inputs.sign_dolby740_macos_pkg }}
+        shell: bash
+        run: |
+          chmod +x ./package_dolby740_vst3_mac_installer.sh
+          ./package_dolby740_vst3_mac_installer.sh \
+            --version "${{ inputs.app_version }}" \
+            --build-dir ./build-mac-dolby \
+            --config Release \
+            --plugin-target "Dolby740_VST3" \
+            --plugin-bundle-name "Dolby 740.vst3" \
+            --package-name "Dolby740_VST3" \
+            --pkg-id "com.audioplugincreator.dolby740.vst3"
+
+      - name: Build signed Dolby740 macOS PKG
+        if: ${{ inputs.sign_dolby740_macos_pkg }}
+        shell: bash
+        env:
+          SIGN_APP_IDENTITY: ${{ secrets.MAC_SIGN_APP_IDENTITY }}
+          SIGN_INSTALLER_IDENTITY: ${{ secrets.MAC_SIGN_INSTALLER_IDENTITY }}
+        run: |
+          if [[ -z "$SIGN_APP_IDENTITY" || -z "$SIGN_INSTALLER_IDENTITY" ]]; then
+            echo "Missing required signing secrets."
+            echo "Expected: MAC_SIGN_APP_IDENTITY and MAC_SIGN_INSTALLER_IDENTITY"
+            exit 1
+          fi
+
+          chmod +x ./package_dolby740_vst3_mac_installer.sh
+          ./package_dolby740_vst3_mac_installer.sh \
+            --version "${{ inputs.app_version }}" \
+            --build-dir ./build-mac-dolby \
+            --config Release \
+            --plugin-target "Dolby740_VST3" \
+            --plugin-bundle-name "Dolby 740.vst3" \
+            --package-name "Dolby740_VST3" \
+            --pkg-id "com.audioplugincreator.dolby740.vst3" \
+            --sign-app-identity "$SIGN_APP_IDENTITY" \
+            --sign-installer-identity "$SIGN_INSTALLER_IDENTITY"
+
+      - name: Upload Dolby740 macOS PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dolby740-macos-pkg
+          path: release/installer-macos/Dolby740_VST3_*.pkg
+          if-no-files-found: error
+
   create-release:
     name: Create GitHub Release
     if: ${{ inputs.create_github_release }}
@@ -115,6 +192,7 @@ jobs:
     needs:
       - build-windows-installer
       - build-macos-installer
+      - build-dolby740-macos-installer
 
     steps:
       - name: Download Windows installer artifact
@@ -135,6 +213,12 @@ jobs:
           name: WingXLIVEConverter-macos-pkg
           path: release-assets/macos-pkg
 
+      - name: Download Dolby740 macOS PKG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Dolby740-macos-pkg
+          path: release-assets/dolby740-macos-pkg
+
       - name: Create release tag
         id: release_meta
         shell: bash
@@ -154,3 +238,4 @@ jobs:
           files: |
             release-assets/windows-installer/*.exe
             release-assets/macos-pkg/*.pkg
+            release-assets/dolby740-macos-pkg/*.pkg
