@@ -153,13 +153,13 @@ jobs:
           set -e
           rm -rf build-mac-dolby
           if command -v ninja >/dev/null 2>&1; then
-            if ! cmake -S . -B build-mac-dolby -G Ninja -DCMAKE_BUILD_TYPE=Release; then
+            if ! cmake -S . -B build-mac-dolby -G Ninja -DCMAKE_BUILD_TYPE=Release -DDOLBY740_CI_ONLY=ON; then
               echo "Ninja configure failed; retrying with default generator."
               rm -rf build-mac-dolby
-              cmake -S . -B build-mac-dolby -DCMAKE_BUILD_TYPE=Release
+              cmake -S . -B build-mac-dolby -DCMAKE_BUILD_TYPE=Release -DDOLBY740_CI_ONLY=ON
             fi
           else
-            cmake -S . -B build-mac-dolby -DCMAKE_BUILD_TYPE=Release
+            cmake -S . -B build-mac-dolby -DCMAKE_BUILD_TYPE=Release -DDOLBY740_CI_ONLY=ON
           fi
 
       - name: Build unsigned Dolby740 macOS PKG

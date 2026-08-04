@@ -84,13 +84,13 @@ jobs:
           set -e
           rm -rf build-mac
           if command -v ninja >/dev/null 2>&1; then
-            if ! cmake -S . -B build-mac -G Ninja -DCMAKE_BUILD_TYPE=Release; then
+            if ! cmake -S . -B build-mac -G Ninja -DCMAKE_BUILD_TYPE=Release -DDOLBY740_CI_ONLY=ON; then
               echo "Ninja configure failed; retrying with default generator."
               rm -rf build-mac
-              cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release
+              cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DDOLBY740_CI_ONLY=ON
             fi
           else
-            cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release
+            cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DDOLBY740_CI_ONLY=ON
           fi
 
       - name: Build unsigned macOS PKG

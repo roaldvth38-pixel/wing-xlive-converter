@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 option(JUCE_FETCH "Download JUCE during configure" ON)
+option(DOLBY740_CI_ONLY "Configure only Dolby740 target" OFF)
 
 if(WIN32 AND NOT DEFINED JUCE_TARGET_ARCHITECTURE)
     if(CMAKE_VS_PLATFORM_NAME STREQUAL "Win32")
@@ -30,6 +31,8 @@ if(JUCE_FETCH)
 else()
     find_package(JUCE CONFIG REQUIRED)
 endif()
+
+if(NOT DOLBY740_CI_ONLY)
 
 juce_add_plugin(MixBalancer
     COMPANY_NAME "Audio Plugin Creator"
@@ -339,6 +342,8 @@ target_link_libraries(BassChannelStrip
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+endif()
 
 # -----------------------------------------------------------------------
 # Dolby740 - Dolby 740 inspired dual-mono spectral processor
