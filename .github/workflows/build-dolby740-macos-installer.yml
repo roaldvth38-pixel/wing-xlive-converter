@@ -65,10 +65,33 @@ jobs:
             exit 1
           fi
 
+      - name: Toolchain diagnostics
+        shell: bash
+        run: |
+          set -e
+          cmake --version
+          xcodebuild -version
+          clang --version
+          if command -v ninja >/dev/null 2>&1; then
+            echo "Ninja found: $(ninja --version)"
+          else
+            echo "Ninja not found on runner."
+          fi
+
       - name: Configure CMake (Ninja, Release)
         shell: bash
         run: |
-          cmake -S . -B build-mac -G Ninja -DCMAKE_BUILD_TYPE=Release
+          set -e
+          rm -rf build-mac
+          if command -v ninja >/dev/null 2>&1; then
+            if ! cmake -S . -B build-mac -G Ninja -DCMAKE_BUILD_TYPE=Release; then
+              echo "Ninja configure failed; retrying with default generator."
+              rm -rf build-mac
+              cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release
+            fi
+          else
+            cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release
+          fi
 
       - name: Build unsigned macOS PKG
         if: ${{ steps.meta.outputs.sign_pkg != 'true' }}
